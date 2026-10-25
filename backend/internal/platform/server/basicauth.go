@@ -6,6 +6,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/rudradcruze/go-react-template/backend/internal/platform/problem"
 )
 
 // basicAuth checks the credentials of each request in constant time.
@@ -24,7 +26,7 @@ func basicAuth(username, password string) gin.HandlerFunc {
 		passMatches := subtle.ConstantTimeCompare(gotPass[:], wantPass[:]) == 1
 		if rejectAll || !ok || !userMatches || !passMatches {
 			c.Header("WWW-Authenticate", `Basic realm="API docs", charset="UTF-8"`)
-			writeProblem(c, http.StatusUnauthorized,
+			problem.Write(c, http.StatusUnauthorized,
 				"The credentials are missing or not correct. Enter the credentials of the API docs.")
 			return
 		}

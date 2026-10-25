@@ -5,12 +5,20 @@ import { api } from "../../../src/api/client";
 import { server } from "../../mocks/server";
 
 describe("the API client", () => {
-  it("sends requests to /api/v1 of the page origin", async () => {
-    server.use(http.get("/api/v1/ping", () => HttpResponse.json({ ok: true })));
+  it("sends requests to /api/v1 of the page origin, with the types of the spec", async () => {
+    const user = {
+      id: "0198f2a0-0000-7000-8000-000000000000",
+      emailAddress: "ann@example.com",
+      displayName: "Ann",
+      createdAt: "2026-10-25T10:00:00Z",
+    };
+    server.use(http.post("/api/v1/users", () => HttpResponse.json(user, { status: 201 })));
 
-    // The spec has no paths yet, so TypeScript accepts any path. Use a typed path when the spec has one.
-    const { data } = await api.GET("/ping");
+    const { data, response } = await api.POST("/users", {
+      body: { emailAddress: "ann@example.com", displayName: "Ann" },
+    });
 
-    expect(data).toEqual({ ok: true });
+    expect(response.status).toBe(201);
+    expect(data).toEqual(user);
   });
 });

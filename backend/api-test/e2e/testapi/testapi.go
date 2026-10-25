@@ -1,0 +1,124 @@
+//go:build e2e
+
+// Package testapi starts the real API for an E2E test. It checks each response against the OpenAPI spec.
+package testapi
+
+import (
+	"bytes"
+	"database/sql"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"github.com/pb33f/libopenapi"
+	validator "github.com/pb33f/libopenapi-validator"
+
+	"github.com/rudradcruze/go-react-template/backend/api"
+	"github.com/rudradcruze/go-react-template/backend/api-test/e2e/testenv"
+	"github.com/rudradcruze/go-react-template/backend/internal/bootstrap"
+	"github.com/rudradcruze/go-react-template/backend/internal/platform/config"
+	"github.com/rudradcruze/go-react-template/backend/internal/platform/database"
+	"github.com/rudradcruze/go-react-template/backend/internal/user/app"
+	"github.com/rudradcruze/go-react-template/backend/internal/user/infra"
+)
+
+// API is a running API, with its own database and its own Redis data.
+type API struct {
+	URL string
+	// DB is a connection to the database of the test, to check the data after a request.
+	DB *sql.DB
+	// Users is the repository on the database of the test. Use it with fixtures.SaveUser to prepare data.
+	Users     app.UserRepository
+	apiPool   *sql.DB // The connection pool that the API uses.
+	validator validator.Validator
+}
+
+// Response is the part of an HTTP response that the tests check.
+type Response struct {
+	StatusCode int
+	Header     http.Header
+	Body       []byte
+}
+
+// Start starts the API on a test port, with the database of the test (see testenv.Begin).
+// The test closes everything when it ends.
+func Start(t *testing.T) *API {
+	t.Helper()
+	res := testenv.Begin(t)
+
+	gormDB, err := database.Open(t.Context(), res.Postgres)
+	if err != nil {
+		t.Fatalf("The API database did not open. Cause: %v", err)
+	}
+	sqlDB, err := gormDB.DB()
+	if err != nil {
+		t.Fatalf("The API database is not available. Cause: %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
+
+	handler := bootstrap.NewAPI(config.Config{}, slog.New(slog.DiscardHandler), gormDB)
+	srv := httptest.NewServer(handler)
+	t.Cleanup(srv.Close)
+
+	doc, err := libopenapi.NewDocument(api.Spec)
+	if err != nil {
+		t.Fatalf("The OpenAPI spec did not load. Cause: %v", err)
+	}
+	specValidator, errs := validator.NewValidator(doc)
+	if len(errs) > 0 {
+		t.Fatalf("The OpenAPI validator did not start. Cause: %v", errs)
+	}
+	return &API{
+		URL:       srv.URL,
+		DB:        testenv.OpenDB(t, res.Postgres),
+		Users:     infra.NewUserRepository(gormDB),
+		apiPool:   sqlDB,
+		validator: specValidator,
+	}
+}
+
+// BreakDatabase closes the connection pool of the API, so that the next database call of the API fails.
+// Use it to test an unexpected error.
+func (a *API) BreakDatabase(t *testing.T) {
+	t.Helper()
+	if err := a.apiPool.Close(); err != nil {
+		t.Fatalf("The connection pool of the API did not close. Cause: %v", err)
+	}
+}
+
+// Do sends a request and checks the response against the spec. The check fails the test when they do not match.
+func (a *API) Do(t *testing.T, method, path, contentType string, body []byte) Response {
+	t.Helper()
+	req, err := http.NewRequestWithContext(t.Context(), method, a.URL+path, bytes.NewReader(body))
+	if err != nil {
+		t.Fatalf("The request is not valid. Cause: %v", err)
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("The request failed. Cause: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	responseBody, err := io.ReadAll(res.Body)
+	if err != nil {
+		t.Fatalf("The test did not read the response body. Cause: %v", err)
+	}
+
+	res.Body = io.NopCloser(bytes.NewReader(responseBody))
+	if ok, errs := a.validator.ValidateHttpResponse(req, res); !ok {
+		for _, e := range errs {
+			t.Errorf("The response does not match the OpenAPI spec: %s. %s", e.Message, e.Reason)
+		}
+	}
+	return Response{StatusCode: res.StatusCode, Header: res.Header, Body: responseBody}
+}
+
+// PostJSON sends a POST request with a JSON body.
+func (a *API) PostJSON(t *testing.T, path, body string) Response {
+	t.Helper()
+	return a.Do(t, http.MethodPost, path, "application/json", []byte(body))
+}

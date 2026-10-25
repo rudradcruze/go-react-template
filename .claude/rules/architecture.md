@@ -12,6 +12,7 @@ The backend is Go with Gin and Domain-Driven Design (DDD). The frontend is React
 │   ├── cmd/worker/            Asynq worker
 │   ├── cmd/migrate/           applies or reverts the migrations
 │   ├── internal/<context>/    one folder for each bounded context
+│   ├── internal/bootstrap/    connects the contexts and builds the HTTP handler
 │   ├── internal/platform/     shared infrastructure
 │   ├── migrations/            goose SQL migrations
 │   └── api-test/              all backend tests
@@ -41,7 +42,9 @@ Each bounded context in `backend/internal/<context>/` has the same folders:
 
 - The `app` layer declares each port as a Go interface where it uses the port. The `infra` layer implements the ports.
 - A bounded context uses a different bounded context only through the `app` package of that context.
-- `internal/platform/` holds the shared infrastructure: `config`, `logger`, `database`, `cache`, `queue` and `server`. It imports no bounded context.
+- `internal/platform/` holds the shared infrastructure: `config`, `logger`, `database`, `cache`, `queue`, `problem`, `httpjson` and `server`. It imports no bounded context.
+- `internal/bootstrap/` is the only place that knows all contexts. It builds the adapters and the use cases, and gives the routes to `server.New`. `cmd/api` and the E2E tests both call it.
+- The Go package of the folder `http/` has the name `<context>http`, for example `userhttp`, so that it does not hide `net/http`.
 - `cmd/api` and `cmd/worker` connect all parts with plain constructor calls, without a dependency injection framework.
 
 ## Errors

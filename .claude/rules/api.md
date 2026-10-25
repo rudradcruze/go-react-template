@@ -27,6 +27,8 @@ paths:
   - 401 when the credentials are missing or not correct
   - 404 when the resource does not exist
   - 409 for a conflict
+  - 413 when the request body is larger than 1 MiB
+  - 415 when the content type of the request is not `application/json`
   - 422 when a domain rule rejects the request
   - 500 for an unexpected error
 
@@ -34,7 +36,7 @@ paths:
 
 A handler does 3 things:
 
-1. Parse the request into the use case input.
+1. Parse the request into the use case input. Read a JSON body with `httpjson.Decode`, which applies the rules for all endpoints: the content type, the maximum size, no unknown field and no data after the JSON value.
 2. Call one use case.
 3. Write the result or the error as the response.
 
@@ -42,9 +44,10 @@ The business rules stay in the domain. Use Gin binding only to parse JSON. Put n
 
 ## Errors
 
-- Send errors as RFC 9457 problem details, with the `application/problem+json` content type and the fields `type`, `title`, `status` and `detail`.
+- Send errors as RFC 9457 problem details, with the `application/problem+json` content type and the fields `type`, `title`, `status` and `detail`. Write them with `platform/problem`.
+- The `title` is the HTTP status phrase, for example "Conflict". RFC 9457 asks for it when `type` is `about:blank`. It is the one text of the API that is not written in STE.
 - Write `title` and `detail` in STE. State the problem, then tell the user what to do.
-- Each bounded context has one function in `http/` that changes its domain errors into problem details.
+- Each bounded context has one function in `http/` that changes its domain errors into problem details. It writes them with `platform/problem`.
 - For an unexpected error, send status 500 with a general `detail`. Write the cause to the log, not to the response.
 
 ## API docs

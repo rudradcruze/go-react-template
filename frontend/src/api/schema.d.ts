@@ -3,15 +3,162 @@
  * Do not make direct changes to the file.
  */
 
-export type paths = Record<string, never>;
+export interface paths {
+    "/users": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a User
+         * @description Creates a User from an email address and a display name. The API removes the spaces around the email address and changes it to lowercase. Two email addresses that are different only in letter case are the same address. The request body is one JSON object with only the fields below. The content type is application/json.
+         */
+        post: operations["registerUser"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+}
 export type webhooks = Record<string, never>;
 export interface components {
-    schemas: never;
-    responses: never;
+    schemas: {
+        RegisterUserRequest: {
+            /**
+             * @description The email address of the User, for example name@example.com. It has only ASCII characters, and the maximum length is 254 characters.
+             * @example ann@example.com
+             */
+            emailAddress: string;
+            /**
+             * @description The name that the application shows for the User. The maximum length is 100 characters.
+             * @example Ann
+             */
+            displayName: string;
+        };
+        User: {
+            /**
+             * Format: uuid
+             * @description The ID of the User. It is a UUID of version 7.
+             */
+            id: string;
+            /** @description The email address of the User, in lowercase. */
+            emailAddress: string;
+            /** @description The name that the application shows for the User. */
+            displayName: string;
+            /**
+             * Format: date-time
+             * @description The time of the Registration, in UTC.
+             */
+            createdAt: string;
+        };
+        /** @description A problem detail, as RFC 9457 defines it. */
+        Problem: {
+            /** @description A URI that names the type of the problem. The value is about:blank when the status code is enough. */
+            type: string;
+            /** @description A short summary of the problem. */
+            title: string;
+            /** @description The HTTP status code. */
+            status: number;
+            /** @description The problem, and what the client must do to correct it. */
+            detail: string;
+        };
+    };
+    responses: {
+        /** @description The API cannot parse the request body, or the body has a field that the API does not know. */
+        BadRequest: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The request conflicts with the data of the application, for example an email address that is already registered. */
+        Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The request body is larger than 1 MiB. */
+        PayloadTooLarge: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The content type of the request is not application/json. */
+        UnsupportedMediaType: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description A rule of the application rejects the request, for example an email address that is not valid. */
+        UnprocessableContent: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The server cannot complete the request. */
+        InternalServerError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+    };
     parameters: never;
     requestBodies: never;
     headers: never;
     pathItems: never;
 }
 export type $defs = Record<string, never>;
-export type operations = Record<string, never>;
+export interface operations {
+    registerUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterUserRequest"];
+            };
+        };
+        responses: {
+            /** @description The User is registered. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+            413: components["responses"]["PayloadTooLarge"];
+            415: components["responses"]["UnsupportedMediaType"];
+            422: components["responses"]["UnprocessableContent"];
+            500: components["responses"]["InternalServerError"];
+        };
+    };
+}

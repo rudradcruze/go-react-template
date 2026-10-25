@@ -1,0 +1,11 @@
+# make gen runs mockery with this file. It writes a mock for each port into api-test/mocks.
+template: testify
+packages:
+  github.com/rudradcruze/go-react-template/backend/internal/user/app:
+    config:
+      dir: api-test/mocks
+      pkgname: mocks
+      filename: "mock_{{.InterfaceName}}.go"
+      structname: "Mock{{.InterfaceName}}"
+    interfaces:
+      UserRepository:

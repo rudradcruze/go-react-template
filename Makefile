@@ -5,6 +5,8 @@
 # Add LOAD_ENV before a command that needs the values of .env.
 LOAD_ENV := set -a; [ ! -f .env ] || . ./.env; set +a;
 
+MOCKERY_VERSION := v3.8.1
+MOCKERY := go run github.com/vektra/mockery/v3@$(MOCKERY_VERSION)
 GOLANGCI_LINT_VERSION := v2.15.0
 GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
@@ -15,7 +17,8 @@ COMPOSE_DEV := docker compose -f compose.yaml -f compose.dev.yaml
 install: ## Install the frontend dependencies
 	pnpm install
 
-gen: ## Generate the frontend types from the OpenAPI spec
+gen: ## Generate the mocks of the ports and the frontend types from the OpenAPI spec
+	cd backend && $(MOCKERY)
 	pnpm --filter frontend run gen
 
 up: ## Start Postgres and Redis for development

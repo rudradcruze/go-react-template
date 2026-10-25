@@ -10,17 +10,23 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/config"
+	"github.com/rudradcruze/go-react-template/backend/internal/platform/problem"
 )
 
-// New builds the Gin engine with all routes of the API.
-func New(cfg config.Config, log *slog.Logger) http.Handler {
+// New builds the Gin engine with all routes of the API. Each function in routes adds the routes
+// of one context to the group /api/v1.
+func New(cfg config.Config, log *slog.Logger, routes ...func(*gin.RouterGroup)) http.Handler {
 	gin.SetMode(gin.ReleaseMode)
 	engine := gin.New()
 	engine.Use(requestLog(log), recoverPanic(log))
 	engine.NoRoute(func(c *gin.Context) {
-		writeProblem(c, http.StatusNotFound, "The resource does not exist. Check the address. Then try again.")
+		problem.Write(c, http.StatusNotFound, "The resource does not exist. Check the address. Then try again.")
 	})
 	registerDocs(engine, cfg.Docs)
+	api := engine.Group("/api/v1")
+	for _, register := range routes {
+		register(api)
+	}
 	return engine
 }
 
@@ -41,6 +47,6 @@ func requestLog(log *slog.Logger) gin.HandlerFunc {
 func recoverPanic(log *slog.Logger) gin.HandlerFunc {
 	return gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, cause any) {
 		log.ErrorContext(c.Request.Context(), "The server could not handle the request.", slog.Any("cause", cause))
-		writeProblem(c, http.StatusInternalServerError, "The server cannot complete the request. Try again in 1 minute.")
+		problem.WriteInternalError(c)
 	})
 }

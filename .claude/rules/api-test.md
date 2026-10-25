@@ -12,9 +12,11 @@ All backend tests are in `backend/api-test/`. Write each test before the code th
 
 ```text
 backend/api-test/
-├── unit/<context>/<layer>_test.go    unit tests
+├── unit/<context>/<layer>_test.go    unit tests, for example unit/user/domain_test.go and unit/user/app_test.go
+├── unit/fixtures/                    tests of the builders in fixtures/
 ├── e2e/<context>/<feature>_test.go   E2E tests
 ├── e2e/testenv/                      helpers for E2E tests: containers and one database for each test
+├── e2e/testapi/                      starts the real API and checks the responses against the spec
 ├── fixtures/                         builders for test data
 └── mocks/                            mocks from mockery (generated)
 ```
@@ -34,13 +36,13 @@ The tests are in different packages from the code. They use only exported identi
 - A unit test replaces every port with a mock. A unit test does not touch Postgres, Redis or the network.
 - mockery generates the mocks from the port interfaces into `mocks/`. Its configuration is `backend/.mockery.yaml`. Run `make gen` after a port changes. Do not edit the files in `mocks/`.
 - Make each mock with its `NewMock<Port>(t)` constructor. The mock then checks its expectations when the test ends.
-- Set expectations with `.EXPECT()`, and give exact arguments. Use `mock.Anything` only for a `context.Context`.
+- Set expectations with `.EXPECT()`, and give exact arguments. Use `mock.Anything` only for a `context.Context`. When an argument has a random value, for example a new ID, match its other fields with `mock.MatchedBy`.
 
 ## Fixtures
 
-- `fixtures/` has a builder for each entity, for example `fixtures.User(fixtures.WithEmail("ann@example.com"))`.
+- `fixtures/` has a builder for each entity, for example `fixtures.User(fixtures.WithEmailAddress("ann@example.com"))`.
 - A builder gives a valid object with default values. Each call gives unique values for unique fields, for example the email address.
-- Unit tests use the builders to make domain objects. E2E tests use the save helpers, for example `fixtures.SaveUser(t, db)`, which save through the repository.
+- Unit tests use the builders to make domain objects. E2E tests use the save helpers, for example `fixtures.SaveUser(t, api.Users)`, which save through the repository.
 
 ## E2E isolation
 
@@ -50,5 +52,5 @@ The tests are in different packages from the code. They use only exported identi
 - `testenv.BeginEmpty(t)` makes a database without tables. Use it to test the migrations, because the template already has applied migrations.
 - `testenv.Begin` also removes all Redis data (`FLUSHALL`) before the test starts.
 - Each test sends real HTTP requests to the real Gin engine, with no mocks.
-- Each test checks each response against `backend/api/openapi.yaml` with `pb33f/libopenapi-validator`.
+- Start the API with `testapi.Start(t)`. It builds the real handler with `bootstrap.NewAPI`, on the database of the test. Send requests with `api.Do` or `api.PostJSON`: they check each response against `backend/api/openapi.yaml` with `pb33f/libopenapi-validator`, so a test cannot skip the check.
 - When `TestMain` ends, it stops the containers. This also removes the template database.

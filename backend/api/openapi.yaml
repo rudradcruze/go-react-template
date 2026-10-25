@@ -5,4 +5,130 @@ info:
   description: The API of the go-react-template application.
 servers:
   - url: /api/v1
-paths: {}
+tags:
+  - name: users
+    description: The Users of the application.
+paths:
+  /users:
+    post:
+      tags: [users]
+      operationId: registerUser
+      summary: Register a User
+      description: >-
+        Creates a User from an email address and a display name.
+        The API removes the spaces around the email address and changes it to lowercase.
+        Two email addresses that are different only in letter case are the same address.
+        The request body is one JSON object with only the fields below. The content type is application/json.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterUserRequest"
+      responses:
+        "201":
+          description: The User is registered.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedMediaType"
+        "422":
+          $ref: "#/components/responses/UnprocessableContent"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
+components:
+  schemas:
+    RegisterUserRequest:
+      type: object
+      required: [emailAddress, displayName]
+      properties:
+        emailAddress:
+          type: string
+          description: >-
+            The email address of the User, for example name@example.com.
+            It has only ASCII characters, and the maximum length is 254 characters.
+          examples: [ann@example.com]
+        displayName:
+          type: string
+          description: The name that the application shows for the User. The maximum length is 100 characters.
+          examples: [Ann]
+    User:
+      type: object
+      required: [id, emailAddress, displayName, createdAt]
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: The ID of the User. It is a UUID of version 7.
+        emailAddress:
+          type: string
+          description: The email address of the User, in lowercase.
+        displayName:
+          type: string
+          description: The name that the application shows for the User.
+        createdAt:
+          type: string
+          format: date-time
+          description: The time of the Registration, in UTC.
+    Problem:
+      type: object
+      description: A problem detail, as RFC 9457 defines it.
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          description: A URI that names the type of the problem. The value is about:blank when the status code is enough.
+        title:
+          type: string
+          description: A short summary of the problem.
+        status:
+          type: integer
+          description: The HTTP status code.
+        detail:
+          type: string
+          description: The problem, and what the client must do to correct it.
+  responses:
+    BadRequest:
+      description: The API cannot parse the request body, or the body has a field that the API does not know.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    Conflict:
+      description: The request conflicts with the data of the application, for example an email address that is already registered.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    PayloadTooLarge:
+      description: The request body is larger than 1 MiB.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnsupportedMediaType:
+      description: The content type of the request is not application/json.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnprocessableContent:
+      description: A rule of the application rejects the request, for example an email address that is not valid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    InternalServerError:
+      description: The server cannot complete the request.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"

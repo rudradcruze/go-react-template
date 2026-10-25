@@ -12,11 +12,11 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rudradcruze/go-react-template/backend/internal/bootstrap"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/cache"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/config"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/database"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/logger"
-	"github.com/rudradcruze/go-react-template/backend/internal/platform/server"
 )
 
 func main() {
@@ -58,7 +58,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.APIPort),
-		Handler:           server.New(cfg, log),
+		Handler:           bootstrap.NewAPI(cfg, log, db),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
