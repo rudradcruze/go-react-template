@@ -44,6 +44,35 @@ paths:
           $ref: "#/components/responses/UnprocessableContent"
         "500":
           $ref: "#/components/responses/InternalServerError"
+  /users/{id}:
+    get:
+      tags: [users]
+      operationId: getUser
+      summary: Get a User
+      description: >-
+        Gives the User with this ID. The API keeps each User in a cache for 5 minutes.
+        A change to the User in the database can need up to 5 minutes to show here.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID of the User, a UUID.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The User.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/InvalidParameter"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalServerError"
 components:
   schemas:
     RegisterUserRequest:
@@ -96,6 +125,18 @@ components:
           type: string
           description: The problem, and what the client must do to correct it.
   responses:
+    InvalidParameter:
+      description: A value in the address of the request is not valid, for example an ID that is not a UUID.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: No resource has this ID.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
     BadRequest:
       description: The API cannot parse the request body, or the body has a field that the API does not know.
       content:

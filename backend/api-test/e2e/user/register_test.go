@@ -202,6 +202,9 @@ func TestAPI_RegisterUser_Returns500AndHidesTheCauseWhenTheDatabaseFails(t *test
 	requireProblem(t, res, http.StatusInternalServerError, "Try again")
 	assert.NotContains(t, strings.ToLower(string(res.Body)), "sql")
 	assert.NotContains(t, strings.ToLower(string(res.Body)), "closed")
+	assert.Contains(t, api.Logs(), "The application did not complete the request.")
+	assert.Contains(t, api.Logs(), `"route":"/api/v1/users"`)
+	assert.Contains(t, api.Logs(), "database is closed")
 }
 
 func TestUsersTable_RejectsARowThatBreaksARuleOfTheDomain(t *testing.T) {

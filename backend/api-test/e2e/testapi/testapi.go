@@ -10,19 +10,40 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
 
 	"github.com/pb33f/libopenapi"
 	validator "github.com/pb33f/libopenapi-validator"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/rudradcruze/go-react-template/backend/api"
 	"github.com/rudradcruze/go-react-template/backend/api-test/e2e/testenv"
 	"github.com/rudradcruze/go-react-template/backend/internal/bootstrap"
+	"github.com/rudradcruze/go-react-template/backend/internal/platform/cache"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/config"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/database"
 	"github.com/rudradcruze/go-react-template/backend/internal/user/app"
 	"github.com/rudradcruze/go-react-template/backend/internal/user/infra"
 )
+
+// logBuffer is a buffer that the API and the test can use at the same time.
+type logBuffer struct {
+	mu   sync.Mutex
+	data bytes.Buffer
+}
+
+func (b *logBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.data.Write(p)
+}
+
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.data.String()
+}
 
 // API is a running API, with its own database and its own Redis data.
 type API struct {
@@ -30,8 +51,12 @@ type API struct {
 	// DB is a connection to the database of the test, to check the data after a request.
 	DB *sql.DB
 	// Users is the repository on the database of the test. Use it with fixtures.SaveUser to prepare data.
-	Users     app.UserRepository
-	apiPool   *sql.DB // The connection pool that the API uses.
+	Users app.UserRepository
+	// Redis is a client on the Redis data of the test, to check the cache after a request.
+	Redis     *redis.Client
+	logs      *logBuffer    // The logs of the API.
+	apiPool   *sql.DB       // The connection pool that the API uses.
+	apiCache  *redis.Client // The Redis client that the API uses.
 	validator validator.Validator
 }
 
@@ -58,7 +83,14 @@ func Start(t *testing.T) *API {
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
 
-	handler := bootstrap.NewAPI(config.Config{}, slog.New(slog.DiscardHandler), gormDB)
+	apiCache, err := cache.Open(t.Context(), res.Redis)
+	if err != nil {
+		t.Fatalf("The API cache did not open. Cause: %v", err)
+	}
+	t.Cleanup(func() { _ = apiCache.Close() })
+
+	logs := &logBuffer{}
+	handler := bootstrap.NewAPI(config.Config{}, slog.New(slog.NewJSONHandler(logs, nil)), gormDB, apiCache)
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
@@ -74,10 +106,16 @@ func Start(t *testing.T) *API {
 		URL:       srv.URL,
 		DB:        testenv.OpenDB(t, res.Postgres),
 		Users:     infra.NewUserRepository(gormDB),
+		Redis:     testenv.OpenRedis(t, res.Redis),
+		logs:      logs,
 		apiPool:   sqlDB,
+		apiCache:  apiCache,
 		validator: specValidator,
 	}
 }
+
+// Logs gives all the log lines that the API wrote until now.
+func (a *API) Logs() string { return a.logs.String() }
 
 // BreakDatabase closes the connection pool of the API, so that the next database call of the API fails.
 // Use it to test an unexpected error.
@@ -85,6 +123,15 @@ func (a *API) BreakDatabase(t *testing.T) {
 	t.Helper()
 	if err := a.apiPool.Close(); err != nil {
 		t.Fatalf("The connection pool of the API did not close. Cause: %v", err)
+	}
+}
+
+// BreakCache closes the Redis client of the API, so that the next cache call of the API fails.
+// Use it to test that the API still works when Redis fails.
+func (a *API) BreakCache(t *testing.T) {
+	t.Helper()
+	if err := a.apiCache.Close(); err != nil {
+		t.Fatalf("The Redis client of the API did not close. Cause: %v", err)
 	}
 }
 
@@ -115,6 +162,12 @@ func (a *API) Do(t *testing.T, method, path, contentType string, body []byte) Re
 		}
 	}
 	return Response{StatusCode: res.StatusCode, Header: res.Header, Body: responseBody}
+}
+
+// Get sends a GET request.
+func (a *API) Get(t *testing.T, path string) Response {
+	t.Helper()
+	return a.Do(t, http.MethodGet, path, "", nil)
 }
 
 // PostJSON sends a POST request with a JSON body.

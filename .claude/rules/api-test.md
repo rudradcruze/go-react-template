@@ -52,5 +52,5 @@ The tests are in different packages from the code. They use only exported identi
 - `testenv.BeginEmpty(t)` makes a database without tables. Use it to test the migrations, because the template already has applied migrations.
 - `testenv.Begin` also removes all Redis data (`FLUSHALL`) before the test starts.
 - Each test sends real HTTP requests to the real Gin engine, with no mocks.
-- Start the API with `testapi.Start(t)`. It builds the real handler with `bootstrap.NewAPI`, on the database of the test. Send requests with `api.Do` or `api.PostJSON`: they check each response against `backend/api/openapi.yaml` with `pb33f/libopenapi-validator`, so a test cannot skip the check.
+- Start the API with `testapi.Start(t)`. It builds the real handler with `bootstrap.NewAPI`, on the database of the test. Send requests with `api.Get`, `api.PostJSON` or `api.Do`: they check each response against `backend/api/openapi.yaml` with `pb33f/libopenapi-validator`, so a test cannot skip the check. `api.DB` and `api.Redis` read the data of the test. `api.Logs()` gives the log lines of the API. `api.BreakDatabase` and `api.BreakCache` make the next call to Postgres or Redis fail, to test an unexpected error.
 - When `TestMain` ends, it stops the containers. This also removes the template database.

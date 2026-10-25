@@ -9,4 +9,5 @@ var (
 	ErrInvalidDisplayName  = errors.New("The display name has a character that is not allowed.")
 	ErrDisplayNameTooLong  = errors.New("The display name is too long.")
 	ErrEmailTaken          = errors.New("The email address is already registered.")
+	ErrUserNotFound        = errors.New("The User does not exist.")
 )

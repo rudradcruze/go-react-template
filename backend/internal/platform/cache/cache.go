@@ -13,9 +13,25 @@ import (
 
 const connectTimeout = 5 * time.Second
 
+// The cache is optional: when Redis fails, the application reads the database. So a call to Redis
+// must fail fast, and it must not retry. A Redis that does not answer then slows a request by under 1 second.
+const (
+	dialTimeout  = 1 * time.Second
+	readTimeout  = 500 * time.Millisecond
+	writeTimeout = 500 * time.Millisecond
+)
+
 // Open connects to Redis, in the cache database, and checks the connection.
 func Open(ctx context.Context, cfg config.Redis) (*redis.Client, error) {
-	client := redis.NewClient(&redis.Options{Addr: cfg.Addr(), Password: cfg.Password, DB: cfg.CacheDB})
+	client := redis.NewClient(&redis.Options{
+		Addr:         cfg.Addr(),
+		Password:     cfg.Password,
+		DB:           cfg.CacheDB,
+		DialTimeout:  dialTimeout,
+		ReadTimeout:  readTimeout,
+		WriteTimeout: writeTimeout,
+		MaxRetries:   -1, // -1 turns the retries off.
+	})
 	pingCtx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
 	if err := client.Ping(pingCtx).Err(); err != nil {

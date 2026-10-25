@@ -58,7 +58,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.APIPort),
-		Handler:           bootstrap.NewAPI(cfg, log, db),
+		Handler:           bootstrap.NewAPI(cfg, log, db, cacheClient),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

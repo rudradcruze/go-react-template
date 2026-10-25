@@ -5,6 +5,7 @@ package platform_test
 import (
 	"net"
 	"testing"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -78,6 +79,30 @@ func TestCache_Open_FailsWhenRedisIsNotReachable(t *testing.T) {
 	_, err := cache.Open(t.Context(), cfg)
 
 	require.ErrorContains(t, err, "REDIS_HOST")
+}
+
+func TestCache_Open_FailsFastWhenRedisDoesNotAnswer(t *testing.T) {
+	// A server that accepts connections and never answers. The cache must not wait for it for many seconds.
+	listener, err := (&net.ListenConfig{}).Listen(t.Context(), "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = listener.Close() })
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			t.Cleanup(func() { _ = conn.Close() })
+		}
+	}()
+	cfg := testenv.Begin(t).Redis
+	cfg.Host, cfg.Port = "127.0.0.1", listener.Addr().(*net.TCPAddr).Port
+
+	start := time.Now()
+	_, err = cache.Open(t.Context(), cfg)
+
+	require.ErrorContains(t, err, "REDIS_HOST")
+	assert.Less(t, time.Since(start), 2*time.Second)
 }
 
 func TestCache_Open_UsesTheCacheDatabaseAndNotTheQueueDatabase(t *testing.T) {
