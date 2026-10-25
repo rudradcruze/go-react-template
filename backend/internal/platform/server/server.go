@@ -1,0 +1,46 @@
+// Package server builds the HTTP engine of the API.
+package server
+
+import (
+	"io"
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+
+	"github.com/rudradcruze/go-react-template/backend/internal/platform/config"
+)
+
+// New builds the Gin engine with all routes of the API.
+func New(cfg config.Config, log *slog.Logger) http.Handler {
+	gin.SetMode(gin.ReleaseMode)
+	engine := gin.New()
+	engine.Use(requestLog(log), recoverPanic(log))
+	engine.NoRoute(func(c *gin.Context) {
+		writeProblem(c, http.StatusNotFound, "The resource does not exist. Check the address. Then try again.")
+	})
+	registerDocs(engine, cfg.Docs)
+	return engine
+}
+
+func requestLog(log *slog.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+		log.LogAttrs(c.Request.Context(), slog.LevelInfo, "The server handled the request.",
+			slog.String("method", c.Request.Method),
+			slog.String("path", c.Request.URL.Path),
+			slog.Int("status", c.Writer.Status()),
+			slog.Duration("duration", time.Since(start)),
+		)
+	}
+}
+
+// recoverPanic sends a general 500 response and writes the cause to the log.
+func recoverPanic(log *slog.Logger) gin.HandlerFunc {
+	return gin.CustomRecoveryWithWriter(io.Discard, func(c *gin.Context, cause any) {
+		log.ErrorContext(c.Request.Context(), "The server could not handle the request.", slog.Any("cause", cause))
+		writeProblem(c, http.StatusInternalServerError, "The server cannot complete the request. Try again in 1 minute.")
+	})
+}

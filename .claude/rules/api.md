@@ -24,6 +24,7 @@ paths:
   - 201 for a create
   - 204 for a response with no body
   - 400 for a request that the API cannot parse
+  - 401 when the credentials are missing or not correct
   - 404 when the resource does not exist
   - 409 for a conflict
   - 422 when a domain rule rejects the request

@@ -1,0 +1,8 @@
+openapi: 3.2.0
+info:
+  title: go-react-template API
+  version: 0.1.0
+  description: The API of the go-react-template application.
+servers:
+  - url: /api/v1
+paths: {}

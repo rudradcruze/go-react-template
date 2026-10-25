@@ -1,0 +1,17 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - bodyclose
+    - errorlint
+    - gosec
+    - noctx
+    - testifylint
+  settings:
+    staticcheck:
+      # The default checks, and without ST1005. The writing rule (.claude/rules/writing.md)
+      # asks for error messages that are complete sentences with a final period.
+      checks: ["all", "-ST1000", "-ST1003", "-ST1005", "-ST1016", "-ST1020", "-ST1021", "-ST1022"]
+formatters:
+  enable:
+    - gofmt
