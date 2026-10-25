@@ -1,0 +1,5 @@
+# The image needs only the code of the commands and the migrations.
+api-test
+.golangci.yml
+.mockery.yaml
+Dockerfile

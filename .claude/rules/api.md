@@ -17,7 +17,7 @@ paths:
 
 ## Routes and JSON
 
-- Put all API routes under `/api/v1`.
+- Put all API routes under `/api/v1`. The routes of the platform are the only others: `GET /healthz` (public, and not in the spec), `/docs` and `/openapi.yaml`.
 - Use camelCase for JSON field names.
 - Use these status codes:
   - 200 for a read

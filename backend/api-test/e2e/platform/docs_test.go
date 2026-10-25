@@ -134,3 +134,13 @@ func TestServer_New_ServesAValidOpenAPI32Spec(t *testing.T) {
 	assert.Equal(t, "3.2.0", doc.GetSpecInfo().Version)
 	assert.True(t, valid, "the spec is not valid: %v", validationErrs)
 }
+
+func TestServer_New_AnswersTheHealthCheckWithoutCredentials(t *testing.T) {
+	// The health check is for the container platform. It is always public, also when the docs need credentials.
+	srv := startServer(t, config.Docs{Enabled: true, AuthEnabled: true, Username: "reader", Password: "secret"})
+
+	res := get(t, srv, "/healthz")
+
+	assert.Equal(t, http.StatusOK, res.StatusCode)
+	assert.JSONEq(t, `{"status":"ok"}`, string(res.Body))
+}

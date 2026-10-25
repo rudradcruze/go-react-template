@@ -1,6 +1,31 @@
 # This file defines the services of the full stack, as they run in deployment.
 # compose.dev.yaml adds the ports for development.
+# Postgres and Redis have no port on the host. Only the other services reach them, on the network of the project.
 name: go-react-template
+
+# The API, the worker and the migrate command are in one image. Each service chooses its command with entrypoint.
+x-backend: &backend
+  image: go-react-template-backend
+  build:
+    context: backend
+  # Build the image at each `docker compose up`. The cache makes it fast when the code did not change,
+  # and a change of the code never runs with an old image.
+  pull_policy: build
+
+# These are the settings of the backend services. Inside the network, Postgres and Redis use the ports of their images.
+x-backend-environment: &backend-environment
+  LOG_LEVEL: ${LOG_LEVEL:-info}
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: "5432"
+  POSTGRES_USER: ${POSTGRES_USER:-app}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.}
+  POSTGRES_DB: ${POSTGRES_DB:-app}
+  POSTGRES_SSLMODE: ${POSTGRES_SSLMODE:-disable}
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+  REDIS_CACHE_DB: ${REDIS_CACHE_DB:-0}
+  REDIS_QUEUE_DB: ${REDIS_QUEUE_DB:-1}
 
 services:
   postgres:
@@ -32,6 +57,78 @@ services:
       - redis-data:/data
     healthcheck:
       test: ["CMD-SHELL", "redis-cli --no-auth-warning $${REDIS_PASSWORD:+-a \"$$REDIS_PASSWORD\"} ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  # The migrate service runs one time and stops. The api and the worker start after it ends without an error.
+  migrate:
+    <<: *backend
+    entrypoint: ["/app/migrate"]
+    command: ["up"]
+    environment: *backend-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *backend
+    entrypoint: ["/app/api"]
+    environment:
+      <<: *backend-environment
+      API_PORT: "5653"
+      API_DOCS_ENABLED: ${API_DOCS_ENABLED:-false}
+      API_DOCS_AUTH_ENABLED: ${API_DOCS_AUTH_ENABLED:-true}
+      API_DOCS_USERNAME: ${API_DOCS_USERNAME:-}
+      API_DOCS_PASSWORD: ${API_DOCS_PASSWORD:-}
+    # The API stops in up to 10 seconds. Give Docker more time than its default of 10 seconds before it kills the process.
+    stop_grace_period: 20s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    # The web service reaches the API on the network. This port is for a person on the host, for example for curl.
+    ports:
+      - "127.0.0.1:${API_PORT:-5653}:5653"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:5653/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  worker:
+    <<: *backend
+    entrypoint: ["/app/worker"]
+    environment:
+      <<: *backend-environment
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-10}
+    # The worker waits up to 8 seconds for the tasks that run. Give it more time than that.
+    stop_grace_period: 20s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # nginx serves the built frontend, and sends /api, /docs and /openapi.yaml to the API.
+  web:
+    image: go-react-template-web
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    pull_policy: build
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-5651}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/healthz"]
       interval: 5s
       timeout: 3s
       retries: 10

@@ -22,6 +22,10 @@ func New(cfg config.Config, log *slog.Logger, routes ...func(*gin.RouterGroup)) 
 	engine.NoRoute(func(c *gin.Context) {
 		problem.Write(c, http.StatusNotFound, "The resource does not exist. Check the address. Then try again.")
 	})
+	// The container platform uses this route to see that the process runs. It does not check Postgres or Redis.
+	engine.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "ok"})
+	})
 	registerDocs(engine, cfg.Docs)
 	api := engine.Group("/api/v1")
 	for _, register := range routes {

@@ -12,7 +12,7 @@ GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$
 
 COMPOSE_DEV := docker compose -f compose.yaml -f compose.dev.yaml
 
-.PHONY: install gen up down logs migrate-up migrate-down dev dev-api dev-worker dev-web test test-e2e lint fmt
+.PHONY: install gen stack-up stack-down up down logs migrate-up migrate-down dev dev-api dev-worker dev-web test test-e2e lint fmt
 
 install: ## Install the frontend dependencies
 	pnpm install
@@ -21,11 +21,18 @@ gen: ## Generate the mocks of the ports and the frontend types from the OpenAPI 
 	cd backend && $(MOCKERY)
 	pnpm --filter frontend run gen
 
+stack-up: ## Build and start the full stack, as it runs in deployment. Stop make dev first, because both use the ports 5651 and 5653
+	docker compose up -d --build --wait
+
+# Compose needs a value for POSTGRES_PASSWORD with all commands, also when .env is missing.
+# --remove-orphans also removes the services that only compose.dev.yaml defines, for example Asynqmon.
+stack-down: ## Stop the full stack. The data stays in the volumes
+	POSTGRES_PASSWORD=unused docker compose down --remove-orphans
+
 up: ## Start Postgres, Redis and Asynqmon for development
 	$(COMPOSE_DEV) up -d --wait postgres redis asynqmon
 
-# Compose needs a value for POSTGRES_PASSWORD with all commands, also when .env is missing.
-# The two commands below do not use the value.
+# The next 2 commands do not use the value of POSTGRES_PASSWORD, but Compose needs a value.
 down: ## Stop the development services. The data stays in the volumes
 	POSTGRES_PASSWORD=unused $(COMPOSE_DEV) down
 

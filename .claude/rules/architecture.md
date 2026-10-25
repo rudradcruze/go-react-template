@@ -91,8 +91,10 @@ Inside Docker, Postgres and Redis use the ports of their images (5432 and 6379).
 
 Docker Compose runs the stack.
 
-- `compose.yaml` holds the full stack, as deployed: `postgres`, `redis`, `migrate`, `api`, `worker` and `web`. Postgres and Redis have no host ports.
-- The one-time `migrate` service runs `cmd/migrate up` before `api` and `worker` start. `cmd/migrate` uses goose as a library.
+- `compose.yaml` holds the full stack, as deployed: `postgres`, `redis`, `migrate`, `api`, `worker` and `web`. Postgres and Redis have no host ports. Run it with `make stack-up`. Stop `make dev` first, because both use the host ports 5651 (web) and 5653 (API, on the local machine only). `make up` and `make stack-up` use the same Compose project and the same data volumes.
+- The API, the worker and the migrate command are in one image (`backend/Dockerfile`). Each service chooses its command with `entrypoint`.
+- The one-time `migrate` service runs `cmd/migrate up`. The `api` and the `worker` start only after it ends without an error. If a migration fails, they do not start.
+- The `web` service starts after the `api` is healthy. The API has `GET /healthz`, outside the OpenAPI spec and outside `/api/v1`. It is public and does not check Postgres or Redis.
 - `compose.dev.yaml` adds the development parts to `compose.yaml`: host ports for Postgres and Redis, and Asynqmon.
 - In development, `make up` starts only `postgres`, `redis` and `asynqmon` in Docker. `make dev` runs the API, the worker and the Vite dev server on the host.
-- In deployment, nginx in the `web` container serves the built frontend and sends `/api` requests to the API. In development, the Vite proxy does this. The browser always sees one origin, so the API needs no CORS settings.
+- In deployment, nginx in the `web` container (`frontend/nginx.conf`) serves the built frontend and sends `/api`, `/docs` and `/openapi.yaml` to the API. It listens on 8080 inside the container, because a process without special rights cannot use port 80, and Compose publishes it on 5651. nginx finds the `api` service again every 10 seconds, so it follows a new container. A request body of more than 2 MiB gets a 413 problem detail from nginx, and the API answers the bodies of more than 1 MiB below that. In development, the Vite proxy does this. The browser always sees one origin, so the API needs no CORS settings.
