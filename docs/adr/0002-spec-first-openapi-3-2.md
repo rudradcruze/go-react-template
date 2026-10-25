@@ -4,4 +4,6 @@ The API contract is the hand-written file `backend/api/openapi.yaml`, in OpenAPI
 
 We use 3.2.0 because it is the newest version. Version 3.2.1 does not exist (October 2026). Not all of our tools fully support 3.2.0. Scalar shows its 3.2 support as "in progress", and `openapi-typescript` documents only 3.0 and 3.1. `pb33f/libopenapi-validator` supports 3.2. Before the spec uses a feature that is new in 3.2, make sure that Scalar and `openapi-typescript` accept it.
 
+We tested this in October 2026. Scalar 1.74.0 shows a 3.2.0 spec without errors. `openapi-typescript` 7.13.0 accepts a 3.2.0 spec and generates correct types for its operations and schemas. It ignores these 3.2 features without an error: the QUERY method, `additionalOperations` and `itemSchema`. So the spec must not use them.
+
 We did not generate the spec from Go code. A generated spec makes the backend the source of truth, and the frontend must then wait for the backend.

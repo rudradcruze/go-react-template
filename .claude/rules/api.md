@@ -11,7 +11,7 @@ paths:
 ## Spec first
 
 - `backend/api/openapi.yaml` is the contract. Write the change in the spec before you write the handler.
-- Use OpenAPI 3.2.0. Before you use a feature that is new in 3.2, make sure that Scalar and `openapi-typescript` accept it (see ADR 0002). Put shared schemas in `components/schemas`. Give each operation an `operationId` in camelCase.
+- Use OpenAPI 3.2.0. Do not use these 3.2 features: the QUERY method, `additionalOperations` and `itemSchema`. `openapi-typescript` ignores them without an error (see ADR 0002). Before you use another feature that is new in 3.2, make sure that Scalar and `openapi-typescript` accept it. Put shared schemas in `components/schemas`. Give each operation an `operationId` in camelCase.
 - After a spec change, run `make gen` to generate the frontend types again.
 - An E2E test checks each response against the spec. See `api-test.md`.
 

@@ -11,7 +11,8 @@ paths:
 ## Toolchain
 
 - The frontend uses React with TypeScript on the Vite+ toolchain. Vite+ builds, tests, lints and formats the code.
-- Run tasks with the scripts in `frontend/package.json`.
+- Run tasks with the scripts in `frontend/package.json`. Vite+ reads all its settings from `frontend/vite.config.ts`.
+- `pnpm-workspace.yaml` in the root of the repo holds the Vite+ catalog. Do not remove it: it replaces `vite` with the core of Vite+.
 - Use TypeScript in strict mode. Give each value a real type in place of `any`.
 
 ## Layout
@@ -21,7 +22,7 @@ frontend/src/
 ├── api/                 typed API client and generated types
 ├── features/<context>/  screens and hooks for each bounded context
 ├── components/          shared UI components
-└── routes/              React Router route definitions
+└── routes/              route definitions, and the pages that belong to no context
 ```
 
 ## API access
@@ -38,8 +39,9 @@ frontend/src/
 
 ## Dev server
 
-- The Vite dev server uses port 5651 with `strictPort: true`.
-- The Vite proxy sends `/api`, `/docs` and `/openapi.yaml` to `http://localhost:5653`.
+- The Vite dev server uses port 5651 (`WEB_PORT`) with `strictPort: true`.
+- The Vite proxy sends `/api`, `/docs` and `/openapi.yaml` to `http://localhost:5653` (`API_PORT`).
+- `vite.config.ts` reads `WEB_PORT` and `API_PORT` from the `.env` file in the root of the repo, and from the environment.
 
 ## Accessibility
 

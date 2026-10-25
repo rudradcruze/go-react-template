@@ -1,3 +1,6 @@
+# First start: run make install, copy .env.example to .env and set its empty values, then run make up.
+# Then run make migrate-up and make dev.
+
 # The shell reads .env, so a value with quotes or # works as in a shell script.
 # Add LOAD_ENV before a command that needs the values of .env.
 LOAD_ENV := set -a; [ ! -f .env ] || . ./.env; set +a;
@@ -7,7 +10,13 @@ GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$
 
 COMPOSE_DEV := docker compose -f compose.yaml -f compose.dev.yaml
 
-.PHONY: up down logs migrate-up migrate-down dev test test-e2e lint fmt
+.PHONY: install gen up down logs migrate-up migrate-down dev dev-api dev-web test test-e2e lint fmt
+
+install: ## Install the frontend dependencies
+	pnpm install
+
+gen: ## Generate the frontend types from the OpenAPI spec
+	pnpm --filter frontend run gen
 
 up: ## Start Postgres and Redis for development
 	$(COMPOSE_DEV) up -d --wait postgres redis
@@ -26,17 +35,26 @@ migrate-up: ## Apply the new database migrations
 migrate-down: ## Revert the last database migration
 	$(LOAD_ENV) cd backend && go run ./cmd/migrate down
 
-dev: ## Start the API on the host
+dev: ## Start the API and the frontend on the host. Press Ctrl-C to stop both
+	$(MAKE) -j2 dev-api dev-web
+
+dev-api: ## Start the API on the host
 	$(LOAD_ENV) cd backend && go run ./cmd/api
 
-test: ## Run the unit tests
+dev-web: ## Start the frontend dev server on the host
+	pnpm --filter frontend run dev
+
+test: ## Run the unit tests of the backend and the frontend
 	cd backend && go test ./...
+	pnpm --filter frontend run test
 
 test-e2e: ## Run the E2E tests, one after the other
 	cd backend && go test -tags e2e -p 1 ./api-test/e2e/...
 
-lint: ## Check the code
+lint: ## Check the code of the backend and the frontend
 	cd backend && $(GOLANGCI_LINT) run --build-tags e2e ./...
+	pnpm --filter frontend run lint
 
-fmt: ## Format the code
+fmt: ## Format the code of the backend and the frontend
 	cd backend && $(GOLANGCI_LINT) fmt ./...
+	pnpm --filter frontend run fmt

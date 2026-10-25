@@ -1,0 +1,15 @@
+packages:
+  - frontend
+# Vite+ replaces vite with its own core. These lines come from the Vite+ template.
+catalog:
+  vite: npm:@voidzero-dev/vite-plus-core@1.4.0
+  vite-plus: 1.4.0
+overrides:
+  vite@*: "catalog:"
+peerDependencyRules:
+  allowAny:
+    - vite
+  allowedVersions:
+    vite: "*"
+    # openapi-typescript needs TypeScript 5. It works with TypeScript 6.
+    "openapi-typescript>typescript": "6"

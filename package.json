@@ -1,0 +1,11 @@
+{
+  "name": "go-react-template",
+  "private": true,
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.15.0",
+      "onFail": "download"
+    }
+  }
+}

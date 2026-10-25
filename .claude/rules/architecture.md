@@ -21,7 +21,9 @@ The backend is Go with Gin and Domain-Driven Design (DDD). The frontend is React
 ├── compose.yaml               full stack, as deployed
 ├── compose.dev.yaml           development parts for compose.yaml
 ├── Makefile
-├── pnpm-workspace.yaml
+├── package.json               root of the pnpm workspace
+├── pnpm-workspace.yaml        workspace packages and the Vite+ catalog
+├── pnpm-lock.yaml
 └── .env.example
 ```
 
