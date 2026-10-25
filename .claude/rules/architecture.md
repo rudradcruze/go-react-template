@@ -1,0 +1,90 @@
+# Architecture
+
+The backend is Go with Gin and Domain-Driven Design (DDD). The frontend is React with TypeScript on the Vite+ toolchain. The ADRs in `docs/adr/` give the reasons for the main decisions.
+
+## Repo layout
+
+```text
+/
+├── backend/                   Go module
+│   ├── api/openapi.yaml       API contract (OpenAPI 3.2.0)
+│   ├── cmd/api/               HTTP server
+│   ├── cmd/worker/            Asynq worker
+│   ├── internal/<context>/    one folder for each bounded context
+│   ├── internal/platform/     shared infrastructure
+│   ├── migrations/            goose SQL migrations
+│   └── api-test/              all backend tests
+├── frontend/                  React app (pnpm workspace package)
+│   ├── src/
+│   └── test/                  all frontend tests
+├── compose.yaml               full stack, as deployed
+├── compose.dev.yaml           development parts for compose.yaml
+├── Makefile
+├── pnpm-workspace.yaml
+└── .env.example
+```
+
+## Bounded context layers
+
+Each bounded context in `backend/internal/<context>/` has the same folders:
+
+| Folder | Contents | Can import |
+| --- | --- | --- |
+| `domain/` | Entities, value objects, domain errors | Standard library, small pure libraries (for example `github.com/google/uuid`) |
+| `app/` | One use case for each operation, and the port interfaces that the use cases call | `domain` |
+| `infra/` | Adapters for the ports: GORM repository, Redis cache, Asynq enqueuer | `app`, `domain`, `platform` |
+| `http/` | Gin handlers, and the mapping between HTTP and the use cases | `app`, `domain`, `platform` |
+| `jobs/` | Asynq task handlers that call use cases | `app`, `domain`, `platform` |
+
+- The `app` layer declares each port as a Go interface where it uses the port. The `infra` layer implements the ports.
+- A bounded context uses a different bounded context only through the `app` package of that context.
+- `internal/platform/` holds the shared infrastructure: `config`, `logger`, `database`, `cache`, `queue` and `server`. It imports no bounded context.
+- `cmd/api` and `cmd/worker` connect all parts with plain constructor calls, without a dependency injection framework.
+
+## Errors
+
+- The domain returns typed errors, for example `ErrEmailTaken`.
+- `infra` changes database errors into domain errors.
+- `http` changes domain errors into RFC 9457 problem details. See `api.md`.
+
+## Background jobs
+
+- Asynq runs the jobs. The queue uses Redis DB 1.
+- Task type names have the form `<context>:<action>`, for example `user:send_welcome_email`.
+- Task payloads are JSON.
+- Each task has a maximum of 3 retries. After the last retry, Asynq archives the task.
+- Enqueue a task only after the database transaction commits. If the enqueue fails, log the error and let the request succeed.
+- When a job must not be lost, use a transactional outbox, and record that decision in an ADR.
+
+## Logs
+
+- Use `log/slog` with the JSON handler. Give the `*slog.Logger` to each part through its constructor.
+- The domain does not write logs.
+
+## Configuration
+
+- `internal/platform/config` reads all environment variables into one typed struct with `caarlos0/env`.
+- The config checks all values at startup. An incorrect value stops the process with a clear error.
+
+## Ports
+
+| Port | Service |
+| --- | --- |
+| 5650 | Asynqmon dashboard (development only) |
+| 5651 | Web: Vite dev server, or nginx in deployment |
+| 5652 | Redis (host side) |
+| 5653 | API, with the API docs at `/docs` |
+| 5654 | Postgres (host side) |
+| 5655 | Web in the frontend E2E stack |
+
+Inside Docker, Postgres and Redis use the ports of their images (5432 and 6379). The worker has no port.
+
+## Deployment
+
+Docker Compose runs the stack.
+
+- `compose.yaml` holds the full stack, as deployed: `postgres`, `redis`, `migrate`, `api`, `worker` and `web`. Postgres and Redis have no host ports.
+- The one-time `migrate` service runs the goose migrations before `api` and `worker` start.
+- `compose.dev.yaml` adds the development parts to `compose.yaml`: host ports for Postgres and Redis, and Asynqmon.
+- In development, `make up` starts only `postgres`, `redis` and `asynqmon` in Docker. `make dev` runs the API, the worker and the Vite dev server on the host.
+- In deployment, nginx in the `web` container serves the built frontend and sends `/api` requests to the API. In development, the Vite proxy does this. The browser always sees one origin, so the API needs no CORS settings.
