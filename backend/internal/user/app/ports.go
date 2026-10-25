@@ -25,3 +25,23 @@ type UserCache interface {
 	// Set keeps the User in the cache.
 	Set(ctx context.Context, user domain.User) error
 }
+
+// WelcomeEmailQueue queues the Welcome email of a User. A worker sends it later.
+type WelcomeEmailQueue interface {
+	EnqueueWelcomeEmail(ctx context.Context, userID uuid.UUID) error
+}
+
+// Email is a message for a person.
+type Email struct {
+	To      domain.EmailAddress
+	Subject string
+	Body    string
+}
+
+// Mailer sends emails.
+//
+// The queue delivers a task at least once, so the mailer can get the same email twice, for example after
+// a crash of the worker. An adapter for a real mail service must tolerate a repeated call, for example with an idempotency key.
+type Mailer interface {
+	Send(ctx context.Context, email Email) error
+}

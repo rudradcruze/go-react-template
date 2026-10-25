@@ -12,7 +12,7 @@ GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$
 
 COMPOSE_DEV := docker compose -f compose.yaml -f compose.dev.yaml
 
-.PHONY: install gen up down logs migrate-up migrate-down dev dev-api dev-web test test-e2e lint fmt
+.PHONY: install gen up down logs migrate-up migrate-down dev dev-api dev-worker dev-web test test-e2e lint fmt
 
 install: ## Install the frontend dependencies
 	pnpm install
@@ -21,8 +21,8 @@ gen: ## Generate the mocks of the ports and the frontend types from the OpenAPI 
 	cd backend && $(MOCKERY)
 	pnpm --filter frontend run gen
 
-up: ## Start Postgres and Redis for development
-	$(COMPOSE_DEV) up -d --wait postgres redis
+up: ## Start Postgres, Redis and Asynqmon for development
+	$(COMPOSE_DEV) up -d --wait postgres redis asynqmon
 
 # Compose needs a value for POSTGRES_PASSWORD with all commands, also when .env is missing.
 # The two commands below do not use the value.
@@ -38,11 +38,14 @@ migrate-up: ## Apply the new database migrations
 migrate-down: ## Revert the last database migration
 	$(LOAD_ENV) cd backend && go run ./cmd/migrate down
 
-dev: ## Start the API and the frontend on the host. Press Ctrl-C to stop both
-	$(MAKE) -j2 dev-api dev-web
+dev: ## Start the API, the worker and the frontend on the host. Press Ctrl-C to stop the 3 processes
+	$(MAKE) -j3 dev-api dev-worker dev-web
 
 dev-api: ## Start the API on the host
 	$(LOAD_ENV) cd backend && go run ./cmd/api
+
+dev-worker: ## Start the worker on the host
+	$(LOAD_ENV) cd backend && go run ./cmd/worker
 
 dev-web: ## Start the frontend dev server on the host
 	pnpm --filter frontend run dev

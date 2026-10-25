@@ -9,3 +9,17 @@ services:
     restart: "no"
     ports:
       - "127.0.0.1:${REDIS_PORT:-5652}:6379"
+
+  # Asynqmon shows the job queue in a browser. Its last release is from 2023, so use it for development only.
+  asynqmon:
+    image: hibiken/asynqmon:0.7.2
+    environment:
+      REDIS_ADDR: redis:6379
+      REDIS_DB: ${REDIS_QUEUE_DB:-1}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${ASYNQMON_PORT:-5650}:8080"
+    restart: "no"

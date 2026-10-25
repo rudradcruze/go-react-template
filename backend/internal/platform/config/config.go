@@ -36,6 +36,15 @@ type Migrate struct {
 	Dir      string `env:"MIGRATIONS_DIR" envDefault:"migrations"`
 }
 
+// Worker holds the settings of the worker. It has only the settings that the worker uses.
+type Worker struct {
+	Logging
+	Postgres Postgres
+	Redis    Redis
+	// Concurrency is the number of tasks that the worker runs at the same time.
+	Concurrency int `env:"WORKER_CONCURRENCY" envDefault:"10"`
+}
+
 // Docs holds the settings of the API docs.
 type Docs struct {
 	Enabled     bool   `env:"API_DOCS_ENABLED" envDefault:"false"`
@@ -154,6 +163,28 @@ func LoadMigrateFrom(environment map[string]string) (Migrate, error) {
 	}
 	if err := errors.Join(cfg.Postgres.validate()...); err != nil {
 		return Migrate{}, err
+	}
+	return cfg, nil
+}
+
+// LoadWorker reads the settings of the worker from the environment of the process.
+func LoadWorker() (Worker, error) {
+	return LoadWorkerFrom(env.ToMap(os.Environ()))
+}
+
+// LoadWorkerFrom reads the settings of the worker from the given variables.
+// It ignores the environment of the process, also when environment is nil.
+func LoadWorkerFrom(environment map[string]string) (Worker, error) {
+	cfg, err := parse[Worker](environment)
+	if err != nil {
+		return Worker{}, err
+	}
+	errs := append(cfg.Postgres.validate(), cfg.Redis.validate()...)
+	if cfg.Concurrency < 1 {
+		errs = append(errs, errors.New("WORKER_CONCURRENCY is not valid. Use a number of 1 or more."))
+	}
+	if err := errors.Join(errs...); err != nil {
+		return Worker{}, err
 	}
 	return cfg, nil
 }

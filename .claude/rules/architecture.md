@@ -58,7 +58,9 @@ Each bounded context in `backend/internal/<context>/` has the same folders:
 - Asynq runs the jobs. The queue uses Redis DB 1.
 - Task type names have the form `<context>:<action>`, for example `user:send_welcome_email`.
 - Task payloads are JSON.
-- Each task has a maximum of 3 retries. After the last retry, Asynq archives the task.
+- Each task has a maximum of 3 retries and a timeout of 1 minute for each try. After the last retry, Asynq archives the task. A task that cannot succeed later, for example a payload that is not valid, returns `asynq.SkipRetry`.
+- The queue delivers a task at least once. A mailer adapter must tolerate a repeated call.
+- The worker logs each task that fails (`queue.NewErrorHandler`), and checks the Redis connection when it starts.
 - Enqueue a task only after the database transaction commits. If the enqueue fails, log the error and let the request succeed.
 - When a job must not be lost, use a transactional outbox, and record that decision in an ADR.
 

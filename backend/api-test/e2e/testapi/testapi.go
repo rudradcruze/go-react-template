@@ -12,10 +12,13 @@ import (
 	"net/http/httptest"
 	"sync"
 	"testing"
+	"time"
 
+	"github.com/hibiken/asynq"
 	"github.com/pb33f/libopenapi"
 	validator "github.com/pb33f/libopenapi-validator"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/gorm"
 
 	"github.com/rudradcruze/go-react-template/backend/api"
 	"github.com/rudradcruze/go-react-template/backend/api-test/e2e/testenv"
@@ -23,6 +26,7 @@ import (
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/cache"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/config"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/database"
+	"github.com/rudradcruze/go-react-template/backend/internal/platform/queue"
 	"github.com/rudradcruze/go-react-template/backend/internal/user/app"
 	"github.com/rudradcruze/go-react-template/backend/internal/user/infra"
 )
@@ -53,11 +57,16 @@ type API struct {
 	// Users is the repository on the database of the test. Use it with fixtures.SaveUser to prepare data.
 	Users app.UserRepository
 	// Redis is a client on the Redis data of the test, to check the cache after a request.
-	Redis     *redis.Client
-	logs      *logBuffer    // The logs of the API.
-	apiPool   *sql.DB       // The connection pool that the API uses.
-	apiCache  *redis.Client // The Redis client that the API uses.
-	validator validator.Validator
+	Redis *redis.Client
+	// QueueInspector reads the job queue, to check the tasks after a request.
+	QueueInspector *asynq.Inspector
+	logs           *logBuffer    // The logs of the API.
+	redisSettings  config.Redis  // The Redis settings of the test.
+	gormDB         *gorm.DB      // The database connection that the API and the worker use.
+	queueClient    *asynq.Client // The queue client that the API uses.
+	apiPool        *sql.DB       // The connection pool that the API uses.
+	apiCache       *redis.Client // The Redis client that the API uses.
+	validator      validator.Validator
 }
 
 // Response is the part of an HTTP response that the tests check.
@@ -89,8 +98,16 @@ func Start(t *testing.T) *API {
 	}
 	t.Cleanup(func() { _ = apiCache.Close() })
 
+	queueClient, err := queue.Open(res.Redis)
+	if err != nil {
+		t.Fatalf("The API queue did not open. Cause: %v", err)
+	}
+	t.Cleanup(func() { _ = queueClient.Close() })
+	inspector := asynq.NewInspector(queue.WorkerOpt(res.Redis))
+	t.Cleanup(func() { _ = inspector.Close() })
+
 	logs := &logBuffer{}
-	handler := bootstrap.NewAPI(config.Config{}, slog.New(slog.NewJSONHandler(logs, nil)), gormDB, apiCache)
+	handler := bootstrap.NewAPI(config.Config{}, slog.New(slog.NewJSONHandler(logs, nil)), gormDB, apiCache, queueClient)
 	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 
@@ -103,15 +120,53 @@ func Start(t *testing.T) *API {
 		t.Fatalf("The OpenAPI validator did not start. Cause: %v", errs)
 	}
 	return &API{
-		URL:       srv.URL,
-		DB:        testenv.OpenDB(t, res.Postgres),
-		Users:     infra.NewUserRepository(gormDB),
-		Redis:     testenv.OpenRedis(t, res.Redis),
-		logs:      logs,
-		apiPool:   sqlDB,
-		apiCache:  apiCache,
-		validator: specValidator,
+		URL:            srv.URL,
+		DB:             testenv.OpenDB(t, res.Postgres),
+		Users:          infra.NewUserRepository(gormDB),
+		Redis:          testenv.OpenRedis(t, res.Redis),
+		QueueInspector: inspector,
+		logs:           logs,
+		redisSettings:  res.Redis,
+		gormDB:         gormDB,
+		queueClient:    queueClient,
+		apiPool:        sqlDB,
+		apiCache:       apiCache,
+		validator:      specValidator,
 	}
+}
+
+// BreakQueue closes the queue client of the API, so that the next call of the API to the queue fails.
+func (a *API) BreakQueue(t *testing.T) {
+	t.Helper()
+	if err := a.queueClient.Close(); err != nil {
+		t.Fatalf("The queue client of the API did not close. Cause: %v", err)
+	}
+}
+
+// Enqueue adds a task to the queue of the API.
+func (a *API) Enqueue(t *testing.T, task *asynq.Task, options ...asynq.Option) {
+	t.Helper()
+	if _, err := a.queueClient.EnqueueContext(t.Context(), task, options...); err != nil {
+		t.Fatalf("The task did not enter the queue. Cause: %v", err)
+	}
+}
+
+// StartWorker starts a worker on the queue and on the database of the test. The worker writes its logs,
+// and the emails of the mailer, to the logs of the API (see Logs). The test stops the worker when it ends.
+func (a *API) StartWorker(t *testing.T) {
+	t.Helper()
+	log := slog.New(slog.NewJSONHandler(a.logs, nil))
+	server := asynq.NewServer(queue.WorkerOpt(a.redisSettings), asynq.Config{
+		Concurrency:         2,
+		TaskCheckInterval:   100 * time.Millisecond,
+		Logger:              queue.NewLogger(log),
+		ErrorHandler:        queue.NewErrorHandler(log),
+		HealthCheckInterval: time.Second,
+	})
+	if err := server.Start(bootstrap.NewWorkerMux(log, a.gormDB)); err != nil {
+		t.Fatalf("The worker did not start. Cause: %v", err)
+	}
+	t.Cleanup(server.Shutdown)
 }
 
 // Logs gives all the log lines that the API wrote until now.

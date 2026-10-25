@@ -241,6 +241,63 @@ func TestConfig_LoadMigrateFrom_RejectsInvalidPostgresValues(t *testing.T) {
 	require.ErrorContains(t, err, "POSTGRES_SSLMODE")
 }
 
+func TestConfig_LoadWorkerFrom_UsesTheDefaultsAndReadsTheGivenValues(t *testing.T) {
+	t.Parallel()
+
+	defaults, err := config.LoadWorkerFrom(map[string]string{})
+	require.NoError(t, err)
+	given, givenErr := config.LoadWorkerFrom(map[string]string{
+		"LOG_LEVEL":      "debug",
+		"POSTGRES_HOST":  "postgres",
+		"REDIS_HOST":     "redis",
+		"REDIS_QUEUE_DB": "3",
+	})
+
+	assert.Equal(t, slog.LevelInfo, defaults.LogLevel)
+	assert.Equal(t, 5654, defaults.Postgres.Port)
+	assert.Equal(t, config.Redis{Host: "localhost", Port: 5652, CacheDB: 0, QueueDB: 1}, defaults.Redis)
+	require.NoError(t, givenErr)
+	assert.Equal(t, slog.LevelDebug, given.LogLevel)
+	assert.Equal(t, "postgres", given.Postgres.Host)
+	assert.Equal(t, "redis", given.Redis.Host)
+	assert.Equal(t, 3, given.Redis.QueueDB)
+}
+
+func TestConfig_LoadWorkerFrom_ReadsTheConcurrency(t *testing.T) {
+	t.Parallel()
+
+	defaults, err := config.LoadWorkerFrom(map[string]string{})
+	require.NoError(t, err)
+	given, givenErr := config.LoadWorkerFrom(map[string]string{"WORKER_CONCURRENCY": "4"})
+	_, zeroErr := config.LoadWorkerFrom(map[string]string{"WORKER_CONCURRENCY": "0"})
+
+	assert.Equal(t, 10, defaults.Concurrency)
+	require.NoError(t, givenErr)
+	assert.Equal(t, 4, given.Concurrency)
+	require.ErrorContains(t, zeroErr, "WORKER_CONCURRENCY")
+}
+
+func TestConfig_LoadWorkerFrom_IgnoresSettingsThatTheWorkerDoesNotUse(t *testing.T) {
+	t.Parallel()
+
+	_, err := config.LoadWorkerFrom(map[string]string{
+		"API_DOCS_ENABLED": "true", // The docs have no credentials, so config.LoadFrom rejects this.
+		"API_PORT":         "0",
+	})
+
+	require.NoError(t, err)
+}
+
+func TestConfig_LoadWorkerFrom_RejectsInvalidPostgresAndRedisValues(t *testing.T) {
+	t.Parallel()
+
+	_, err := config.LoadWorkerFrom(map[string]string{"POSTGRES_PORT": "0", "REDIS_PORT": "0", "REDIS_QUEUE_DB": "0"})
+
+	require.ErrorContains(t, err, "POSTGRES_PORT")
+	require.ErrorContains(t, err, "REDIS_PORT")
+	require.ErrorContains(t, err, "REDIS_QUEUE_DB") // The cache database is 0 as well, so the 2 databases are the same.
+}
+
 // A person copies .env.example to .env, so the file must give a valid config.
 func TestConfig_LoadFrom_AcceptsTheEnvExampleFile(t *testing.T) {
 	t.Parallel()

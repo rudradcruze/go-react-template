@@ -14,6 +14,7 @@ import (
 	"github.com/rudradcruze/go-react-template/backend/api-test/e2e/testenv"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/cache"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/database"
+	"github.com/rudradcruze/go-react-template/backend/internal/platform/queue"
 )
 
 // unusedPort gives a port on which nothing listens.
@@ -79,6 +80,25 @@ func TestCache_Open_FailsWhenRedisIsNotReachable(t *testing.T) {
 	_, err := cache.Open(t.Context(), cfg)
 
 	require.ErrorContains(t, err, "REDIS_HOST")
+}
+
+func TestQueue_Open_ConnectsToRedis(t *testing.T) {
+	res := testenv.Begin(t)
+
+	client, err := queue.Open(res.Redis)
+
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = client.Close() })
+	assert.NoError(t, client.Ping())
+}
+
+func TestQueue_Open_FailsWhenRedisIsNotReachable(t *testing.T) {
+	cfg := testenv.Begin(t).Redis
+	cfg.Port = unusedPort(t)
+
+	_, err := queue.Open(cfg)
+
+	require.ErrorContains(t, err, "REDIS_QUEUE_DB")
 }
 
 func TestCache_Open_FailsFastWhenRedisDoesNotAnswer(t *testing.T) {

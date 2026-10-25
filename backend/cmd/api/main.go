@@ -17,6 +17,7 @@ import (
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/config"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/database"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/logger"
+	"github.com/rudradcruze/go-react-template/backend/internal/platform/queue"
 )
 
 func main() {
@@ -55,10 +56,16 @@ func run() error {
 		return err
 	}
 	defer func() { _ = cacheClient.Close() }()
+	queueClient, err := queue.Open(cfg.Redis)
+	if err != nil {
+		log.Error("The API cannot start.", slog.Any("error", err))
+		return err
+	}
+	defer func() { _ = queueClient.Close() }()
 
 	srv := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.APIPort),
-		Handler:           bootstrap.NewAPI(cfg, log, db, cacheClient),
+		Handler:           bootstrap.NewAPI(cfg, log, db, cacheClient, queueClient),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
