@@ -30,7 +30,7 @@ frontend/src/
 - `openapi-typescript` generates `src/api/schema.d.ts` from `backend/api/openapi.yaml`. Run `make gen` after a spec change. Do not edit the generated file.
 - Send all API requests through the `openapi-fetch` client in `src/api/`. Components do not call `fetch` directly.
 - Keep server data in TanStack Query. Start each query key with the context name, for example `["user", id]`.
-- Show the `detail` text of a problem response to the user when it helps the user correct the problem.
+- Give the response of the client to `unwrap` in `src/api/errors.ts`. It checks `response.ok`, not only the body, because a failed response can have no body. It throws an `ApiError` whose message is the `detail` of the problem, or a general message when the body has no text `detail`. Show that message to the user.
 
 ## Routes and styles
 
@@ -46,4 +46,5 @@ frontend/src/
 ## Accessibility
 
 - Use semantic HTML elements. Give each form field a label.
-- Make each action work with the keyboard.
+- Make each action work with the keyboard. Do not use `disabled` on a button that the person has just used: a disabled button loses the focus. Use `aria-disabled` and ignore the second send.
+- Keep the regions for the messages (`role="status"` and `role="alert"`) in the page all the time, and put the text in them. A screen reader announces the text that appears in a region that was there before.
