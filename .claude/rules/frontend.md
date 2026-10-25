@@ -35,6 +35,10 @@ frontend/src/
 ## Routes and styles
 
 - Define routes with React Router in `src/routes/`.
+- Make the query client with `createQueryClient` in `src/api/query-client.ts`. It sets the retry rule (`shouldRetry`) and a fresh time of 30 seconds for a query result.
+- After a mutation, when the next page shows its result, put the result in the query cache with `setQueryData`, so the next page does not need a second request. Navigate with `replace` after a form, so the Back button does not return to the form.
+- Each page sets the title of the tab with `usePageTitle`. A page that the person reaches after an action moves the focus to its heading.
+- A page that shows data from a query keeps the data when a later refresh fails. It shows the error only when it has no data.
 - Use Tailwind CSS v4 utility classes for styles.
 
 ## Dev server

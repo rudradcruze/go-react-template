@@ -1,27 +1,34 @@
 import { useState, type FormEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router";
 
-import { ApiError } from "../../api/errors";
+import { messageOf } from "../../api/errors";
+import { usePageTitle } from "../../components/use-page-title";
 import { useRegisterUser, type RegisterUserRequest } from "./use-register-user";
+import { userQueryKey } from "./use-user";
 
 const fieldClass = "mt-1 w-full rounded border border-gray-500 px-3 py-2";
 
-function messageOf(error: Error): string {
-  if (error instanceof ApiError) {
-    return error.message;
-  }
-  return "The application cannot reach the server. Check your connection. Then try again.";
-}
-
 export function RegisterPage() {
+  usePageTitle("Registration");
   const [form, setForm] = useState<RegisterUserRequest>({ emailAddress: "", displayName: "" });
   const registration = useRegisterUser();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (registration.isPending) {
       return;
     }
-    registration.mutate(form);
+    registration.mutate(form, {
+      onSuccess: (user) => {
+        // The response has the User, so the User page does not depend on a second request.
+        queryClient.setQueryData(userQueryKey(user.id), user);
+        // Replace the page in the history, so the Back button does not return to the form: a second send gives 409.
+        void navigate(`/users/${user.id}`, { replace: true });
+      },
+    });
   }
 
   return (
@@ -61,10 +68,7 @@ export function RegisterPage() {
           Register
         </button>
       </form>
-      {/* The 2 regions are always in the page. A screen reader announces the text that appears in a region that was there before. */}
-      <div className="mt-4 text-green-800 empty:mt-0" role="status">
-        {registration.isSuccess && "The Registration is complete."}
-      </div>
+      {/* The region is always in the page. A screen reader announces the text that appears in a region that was there before. */}
       <div className="mt-4 text-red-800 empty:mt-0" role="alert">
         {registration.isError && messageOf(registration.error)}
       </div>

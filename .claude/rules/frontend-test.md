@@ -15,7 +15,7 @@ frontend/test/
 ├── unit/<feature>/   Vitest tests for components, hooks and functions
 ├── e2e/              Playwright tests
 ├── fixtures/         builders for test data
-├── mocks/            MSW request handlers
+├── mocks/            MSW request handlers, and urls.ts with the URLs of the API
 └── render.tsx        renderApp(path): renders the application with the router and a query client
 ```
 
@@ -25,6 +25,7 @@ frontend/test/
 - Find elements as the user finds them: by role, label or text. Use a test ID only when no other query works.
 - Use `@testing-library/user-event` for user actions.
 - Send all API requests in unit tests to MSW. Type the MSW handlers with the types of `src/api/schema.d.ts`, for example `http.post<never, RegisterUserRequest, User>(url, ...)`.
+- A test must wait until each request that its page sends has reached MSW. A request that arrives after the test ends gets no handler, and the setup reports it as a failure of the next test. Wait for the text that the response shows, not only for a heading or for an always-present region such as `role="alert"`.
 - Test the failed responses that a proxy can send, not only the problem details of the API: an empty body, an HTML body, a JSON `null`, and a response with `Content-Length: 0`.
 - `test/setup.ts` starts the mock server at the top of the file, before a test imports the app. The API client keeps the `fetch` function that exists when its module loads.
 - A request without a handler gets a 500 response, and the `afterEach` hook fails the test, also when the app catches the error. A test that expects such a request takes the record from `unhandledRequests`.

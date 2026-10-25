@@ -1,6 +1,10 @@
 import { Link } from "react-router";
 
+import { usePageTitle } from "../components/use-page-title";
+
 export function HomePage() {
+  usePageTitle("Home");
+
   return (
     <main className="mx-auto max-w-2xl p-8">
       <h1 className="text-3xl font-bold">go-react-template</h1>

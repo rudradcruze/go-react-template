@@ -3,6 +3,9 @@ import type { components } from "../../src/api/schema";
 export type User = components["schemas"]["User"];
 export type RegisterUserRequest = components["schemas"]["RegisterUserRequest"];
 
+// The ID of a User that does not exist.
+export const unknownUserId = "0198f2a0-0000-7000-8000-000000000000";
+
 let counter = 0;
 
 // A builder gives a valid object with default values, and each call gives unique values for the unique fields.

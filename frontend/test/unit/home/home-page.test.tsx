@@ -12,6 +12,12 @@ describe("the home page", () => {
     ).toBeInTheDocument();
   });
 
+  it("has a page title", () => {
+    renderApp("/");
+
+    expect(document.title).toBe("Home - go-react-template");
+  });
+
   it("has a link to the Registration page", () => {
     renderApp("/");
 
