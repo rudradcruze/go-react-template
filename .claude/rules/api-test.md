@@ -14,6 +14,7 @@ All backend tests are in `backend/api-test/`. Write each test before the code th
 backend/api-test/
 ├── unit/<context>/<layer>_test.go    unit tests
 ├── e2e/<context>/<feature>_test.go   E2E tests
+├── e2e/testenv/                      helpers for E2E tests: containers and one database for each test
 ├── fixtures/                         builders for test data
 └── mocks/                            mocks from mockery (generated)
 ```
@@ -44,9 +45,10 @@ The tests are in different packages from the code. They use only exported identi
 ## E2E isolation
 
 - Each E2E file starts with `//go:build e2e`.
-- `TestMain` in each E2E package starts Postgres and Redis with testcontainers-go on random ports. It makes a template database and runs the goose migrations on it one time.
-- Each test calls a helper that makes a new database from the template, with the name `test_<random>`. The helper drops the database in `t.Cleanup`, also when the test fails.
-- The same helper removes all Redis data (`FLUSHALL`) before the test starts.
+- `TestMain` in each E2E package calls `os.Exit(testenv.Main(m))`. `testenv.Main` starts Postgres and Redis with testcontainers-go on random ports. It makes a template database and runs the goose migrations on it one time. A package can set `testenv.MigrationsDir` before it calls `Main`, to use its own test migrations.
+- Each test calls `testenv.Begin(t)`. The helper makes a new database from the template, with the name `test_<random>`. It drops the database in `t.Cleanup`, also when the test fails.
+- `testenv.BeginEmpty(t)` makes a database without tables. Use it to test the migrations, because the template already has applied migrations.
+- `testenv.Begin` also removes all Redis data (`FLUSHALL`) before the test starts.
 - Each test sends real HTTP requests to the real Gin engine, with no mocks.
 - Each test checks each response against `backend/api/openapi.yaml` with `pb33f/libopenapi-validator`.
 - When `TestMain` ends, it stops the containers. This also removes the template database.

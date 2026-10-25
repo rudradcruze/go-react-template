@@ -1,0 +1,42 @@
+# This file defines the services of the full stack, as they run in deployment.
+# compose.dev.yaml adds the ports for development.
+name: go-react-template
+
+services:
+  postgres:
+    image: postgres:18-alpine # Use the same image in backend/api-test/e2e/testenv.
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env.}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    healthcheck:
+      # Check over TCP. During the first start, the temporary server of the image listens only on a socket.
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine # Use the same image in backend/api-test/e2e/testenv.
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+    # The append-only file keeps the queued jobs when Redis restarts.
+    command:
+      - sh
+      - -c
+      - exec redis-server --appendonly yes $${REDIS_PASSWORD:+--requirepass "$$REDIS_PASSWORD"}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning $${REDIS_PASSWORD:+-a \"$$REDIS_PASSWORD\"} ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:

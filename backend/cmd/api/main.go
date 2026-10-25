@@ -12,7 +12,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rudradcruze/go-react-template/backend/internal/platform/cache"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/config"
+	"github.com/rudradcruze/go-react-template/backend/internal/platform/database"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/logger"
 	"github.com/rudradcruze/go-react-template/backend/internal/platform/server"
 )
@@ -32,14 +34,34 @@ func run() error {
 	}
 	log := logger.New(cfg.LogLevel, os.Stdout)
 
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Connect at startup, so a wrong setting stops the API at once.
+	db, err := database.Open(ctx, cfg.Postgres)
+	if err != nil {
+		log.Error("The API cannot start.", slog.Any("error", err))
+		return err
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		log.Error("The API cannot start.", slog.Any("error", err))
+		return err
+	}
+	defer func() { _ = sqlDB.Close() }()
+	cacheClient, err := cache.Open(ctx, cfg.Redis)
+	if err != nil {
+		log.Error("The API cannot start.", slog.Any("error", err))
+		return err
+	}
+	defer func() { _ = cacheClient.Close() }()
+
 	srv := &http.Server{
 		Addr:              ":" + strconv.Itoa(cfg.APIPort),
 		Handler:           server.New(cfg, log),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	go func() {
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)

@@ -2,6 +2,7 @@ package platform_test
 
 import (
 	"log/slog"
+	"net/url"
 	"os"
 	"strings"
 	"testing"
@@ -24,6 +25,71 @@ func TestConfig_LoadFrom_UsesTheDefaultsWhenTheEnvironmentIsEmpty(t *testing.T) 
 	assert.True(t, cfg.Docs.AuthEnabled)
 	assert.Empty(t, cfg.Docs.Username)
 	assert.Empty(t, cfg.Docs.Password)
+}
+
+func TestConfig_LoadFrom_UsesTheDefaultsForPostgresAndRedis(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := config.LoadFrom(map[string]string{})
+
+	require.NoError(t, err)
+	assert.Equal(t, config.Postgres{
+		Host: "localhost", Port: 5654, User: "app", DB: "app", SSLMode: "disable",
+	}, cfg.Postgres)
+	assert.Equal(t, config.Redis{
+		Host: "localhost", Port: 5652, CacheDB: 0, QueueDB: 1,
+	}, cfg.Redis)
+}
+
+func TestConfig_LoadFrom_ReadsThePostgresAndRedisValues(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := config.LoadFrom(map[string]string{
+		"POSTGRES_HOST":     "db.internal",
+		"POSTGRES_PORT":     "5432",
+		"POSTGRES_USER":     "owner",
+		"POSTGRES_PASSWORD": "secret",
+		"POSTGRES_DB":       "orders",
+		"POSTGRES_SSLMODE":  "require",
+		"REDIS_HOST":        "cache.internal",
+		"REDIS_PORT":        "6379",
+		"REDIS_PASSWORD":    "other",
+		"REDIS_CACHE_DB":    "2",
+		"REDIS_QUEUE_DB":    "3",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, config.Postgres{
+		Host: "db.internal", Port: 5432, User: "owner", Password: "secret", DB: "orders", SSLMode: "require",
+	}, cfg.Postgres)
+	assert.Equal(t, config.Redis{
+		Host: "cache.internal", Port: 6379, Password: "other", CacheDB: 2, QueueDB: 3,
+	}, cfg.Redis)
+}
+
+func TestPostgres_DSN_EscapesSpecialCharacters(t *testing.T) {
+	t.Parallel()
+	pg := config.Postgres{ //nolint:gosec // The password is a test value, not a real credential.
+		Host: "db.internal", Port: 5654, User: "ow ner", Password: "p@ss:w/rd#?%", DB: "app", SSLMode: "require",
+	}
+
+	parsed, err := url.Parse(pg.DSN())
+
+	require.NoError(t, err)
+	password, _ := parsed.User.Password()
+	assert.Equal(t, "postgres", parsed.Scheme)
+	assert.Equal(t, "ow ner", parsed.User.Username())
+	assert.Equal(t, "p@ss:w/rd#?%", password)
+	assert.Equal(t, "db.internal:5654", parsed.Host)
+	assert.Equal(t, "/app", parsed.Path)
+	assert.Equal(t, "require", parsed.Query().Get("sslmode"))
+}
+
+func TestRedis_Addr_JoinsTheHostAndThePort(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, "localhost:5652", config.Redis{Host: "localhost", Port: 5652}.Addr())
+	assert.Equal(t, "[::1]:5652", config.Redis{Host: "::1", Port: 5652}.Addr())
 }
 
 func TestConfig_LoadFrom_ReadsTheGivenValues(t *testing.T) {
@@ -103,6 +169,16 @@ func TestConfig_LoadFrom_RejectsInvalidValues(t *testing.T) {
 		{name: "port is too high", env: map[string]string{"API_PORT": "70000"}, variable: "API_PORT"},
 		{name: "log level is unknown", env: map[string]string{"LOG_LEVEL": "loud"}, variable: "LOG_LEVEL"},
 		{name: "docs flag is not a boolean", env: map[string]string{"API_DOCS_ENABLED": "maybe"}, variable: "API_DOCS_ENABLED"},
+		{name: "Postgres port is zero", env: map[string]string{"POSTGRES_PORT": "0"}, variable: "POSTGRES_PORT"},
+		{name: "Redis port is too high", env: map[string]string{"REDIS_PORT": "70000"}, variable: "REDIS_PORT"},
+		{name: "Redis cache database is negative", env: map[string]string{"REDIS_CACHE_DB": "-1"}, variable: "REDIS_CACHE_DB"},
+		{name: "Redis queue database is negative", env: map[string]string{"REDIS_QUEUE_DB": "-1"}, variable: "REDIS_QUEUE_DB"},
+		{name: "Postgres SSL mode is unknown", env: map[string]string{"POSTGRES_SSLMODE": "maybe"}, variable: "POSTGRES_SSLMODE"},
+		{
+			name:     "cache and queue use the same Redis database",
+			env:      map[string]string{"REDIS_CACHE_DB": "2", "REDIS_QUEUE_DB": "2"},
+			variable: "REDIS_QUEUE_DB",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -113,6 +189,56 @@ func TestConfig_LoadFrom_RejectsInvalidValues(t *testing.T) {
 			require.ErrorContains(t, err, tt.variable)
 		})
 	}
+}
+
+func TestConfig_LoadMigrateFrom_UsesTheDefaults(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := config.LoadMigrateFrom(map[string]string{})
+
+	require.NoError(t, err)
+	assert.Equal(t, "migrations", cfg.Dir)
+	assert.Equal(t, slog.LevelInfo, cfg.LogLevel)
+	assert.Equal(t, "localhost", cfg.Postgres.Host)
+	assert.Equal(t, 5654, cfg.Postgres.Port)
+}
+
+func TestConfig_LoadMigrateFrom_ReadsTheGivenValues(t *testing.T) {
+	t.Parallel()
+
+	cfg, err := config.LoadMigrateFrom(map[string]string{
+		"MIGRATIONS_DIR":    "/migrations",
+		"LOG_LEVEL":         "debug",
+		"POSTGRES_HOST":     "postgres",
+		"POSTGRES_PASSWORD": "secret",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "/migrations", cfg.Dir)
+	assert.Equal(t, slog.LevelDebug, cfg.LogLevel)
+	assert.Equal(t, "postgres", cfg.Postgres.Host)
+	assert.Equal(t, "secret", cfg.Postgres.Password)
+}
+
+func TestConfig_LoadMigrateFrom_IgnoresSettingsThatTheCommandDoesNotUse(t *testing.T) {
+	t.Parallel()
+
+	_, err := config.LoadMigrateFrom(map[string]string{
+		"API_DOCS_ENABLED": "true", // The docs have no credentials, so config.LoadFrom rejects this.
+		"API_PORT":         "0",
+		"REDIS_PORT":       "0",
+	})
+
+	require.NoError(t, err)
+}
+
+func TestConfig_LoadMigrateFrom_RejectsInvalidPostgresValues(t *testing.T) {
+	t.Parallel()
+
+	_, err := config.LoadMigrateFrom(map[string]string{"POSTGRES_PORT": "0", "POSTGRES_SSLMODE": "maybe"})
+
+	require.ErrorContains(t, err, "POSTGRES_PORT")
+	require.ErrorContains(t, err, "POSTGRES_SSLMODE")
 }
 
 // A person copies .env.example to .env, so the file must give a valid config.
@@ -137,7 +263,7 @@ func TestConfig_LoadFrom_AcceptsTheEnvExampleFile(t *testing.T) {
 	assert.False(t, cfg.Docs.Enabled)
 }
 
-// The next 2 tests cannot call t.Parallel, because t.Setenv changes the environment of the process.
+// The next 3 tests cannot call t.Parallel, because t.Setenv changes the environment of the process.
 
 func TestConfig_Load_ReadsTheEnvironmentOfTheProcess(t *testing.T) {
 	t.Setenv("API_PORT", "6001")
@@ -155,4 +281,13 @@ func TestConfig_LoadFrom_IgnoresTheEnvironmentOfTheProcess(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, 5653, cfg.APIPort)
+}
+
+func TestConfig_LoadMigrate_ReadsTheEnvironmentOfTheProcess(t *testing.T) {
+	t.Setenv("MIGRATIONS_DIR", "/from-process")
+
+	cfg, err := config.LoadMigrate()
+
+	require.NoError(t, err)
+	assert.Equal(t, "/from-process", cfg.Dir)
 }

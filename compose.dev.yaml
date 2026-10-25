@@ -1,0 +1,11 @@
+# This file adds the development settings to compose.yaml. Use the two files together.
+# The ports are open on the local machine only.
+services:
+  postgres:
+    restart: "no" # A development database does not start again after a reboot.
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5654}:5432"
+  redis:
+    restart: "no"
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-5652}:6379"
