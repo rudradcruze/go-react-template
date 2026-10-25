@@ -39,8 +39,11 @@ frontend/test/
 
 ## E2E tests
 
-- Playwright runs against the real stack. E2E tests use no MSW.
-- `make test-web-e2e` starts a separate Compose project with an empty database. Only the `web` service has a host port: 5655.
-- Playwright uses `http://localhost:5655` as its `baseURL`.
-- When the run ends, `make test-web-e2e` removes the project and its volumes with `docker compose down -v`, also when tests fail.
-- Each test makes its own data with unique values. A test does not use data from a different test, so the tests can run in any order.
+- Playwright runs against the real stack: nginx, the API, the worker, Postgres and Redis. E2E tests use no MSW.
+- `make test-web-e2e` runs `scripts/test-web-e2e.sh`. The script starts the full stack (`compose.yaml` and `compose.e2e.yaml`) in the Compose project `go-react-template-e2e`, with an empty database and a new random password. The project reads neither `.env` nor the settings of your shell: the script uses `--env-file /dev/null` and clears them.
+- Only the `web` service has a host port: 5655 (`E2E_WEB_PORT`). The development stack can run at the same time.
+- Playwright uses `http://localhost:5655` as its `baseURL`. To run the tests against a stack that already runs, set `E2E_WEB_PORT` and run `pnpm --filter frontend run test:e2e`.
+- If the script shows that a test failed or the stack did not start, it prints the end of the logs of the services before it removes the project. Do not run 2 copies of the script on one Docker host at the same time.
+- When the run ends, the script removes the project and its volumes with `docker compose down --volumes`, also when a test fails (a `trap` on `EXIT`).
+- Each test makes its own data with unique values (`test/e2e/support.ts`). A test does not use data from a different test, so the tests can run in any order, also at the same time. A test prepares data with `request.post` and tests the screen with `page`.
+- `test/e2e/web-container.spec.ts` checks what nginx does: the proxy routes, the headers, the 413 answers and the health check.

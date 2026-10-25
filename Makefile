@@ -12,7 +12,7 @@ GOLANGCI_LINT := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$
 
 COMPOSE_DEV := docker compose -f compose.yaml -f compose.dev.yaml
 
-.PHONY: install gen stack-up stack-down up down logs migrate-up migrate-down dev dev-api dev-worker dev-web test test-e2e lint fmt
+.PHONY: install gen stack-up stack-down up down logs migrate-up migrate-down dev dev-api dev-worker dev-web test test-e2e test-web-e2e lint fmt
 
 install: ## Install the frontend dependencies
 	pnpm install
@@ -63,6 +63,9 @@ test: ## Run the unit tests of the backend and the frontend
 
 test-e2e: ## Run the E2E tests, one after the other
 	cd backend && go test -tags e2e -p 1 ./api-test/e2e/...
+
+test-web-e2e: ## Run the browser tests against the full stack in a Compose project of its own, on the port 5655
+	./scripts/test-web-e2e.sh
 
 lint: ## Check the code of the backend and the frontend
 	cd backend && $(GOLANGCI_LINT) run --build-tags e2e ./...

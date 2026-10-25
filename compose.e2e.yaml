@@ -1,0 +1,10 @@
+# This file adds the settings of the browser tests to compose.yaml.
+# scripts/test-web-e2e.sh uses it. The project has its own name, so its containers and its volumes
+# are not the ones of the development stack.
+# Only the web service has a port on the host. The development stack can run at the same time.
+# The tag !reset needs Docker Compose 2.24.4 or a later version.
+name: go-react-template-e2e
+
+services:
+  api:
+    ports: !reset []

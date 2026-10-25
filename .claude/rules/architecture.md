@@ -21,6 +21,8 @@ The backend is Go with Gin and Domain-Driven Design (DDD). The frontend is React
 │   └── test/                  all frontend tests
 ├── compose.yaml               full stack, as deployed
 ├── compose.dev.yaml           development parts for compose.yaml
+├── compose.e2e.yaml           settings of the browser tests for compose.yaml
+├── scripts/test-web-e2e.sh    runs the browser tests in a Compose project of their own
 ├── Makefile
 ├── package.json               root of the pnpm workspace
 ├── pnpm-workspace.yaml        workspace packages and the Vite+ catalog
